@@ -43,5 +43,6 @@ export function score(
     (sum, part) => sum + part.desire * part.weight,
     0,
   );
-  return { status: "scored", value: (weighted / weight) * 100 };
+  // nearest integer, thirds of a weight are not exact in binary
+  return { status: "scored", value: Math.round((weighted / weight) * 100) };
 }

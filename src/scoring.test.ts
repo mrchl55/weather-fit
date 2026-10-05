@@ -54,6 +54,13 @@ describe("score", () => {
     });
   });
 
+  it("rounds to the nearest integer", () => {
+    expect(score([{ desire: 1 / 3, weight: 1 }])).toEqual({
+      status: "scored",
+      value: 33,
+    });
+  });
+
   it("returns 0 when there is nothing to weigh", () => {
     expect(score([])).toEqual({ status: "scored", value: 0 });
     expect(score([{ desire: 1, weight: 0 }])).toEqual({
