@@ -6,28 +6,54 @@ import type { SurfDay } from "./activities/surfing.js";
 
 const numbers = z.array(z.number());
 const nullableNumbers = z.array(z.number().nullable());
+const optionalText = z.string().nullable().optional();
+
+const forecastDaily = {
+  temperature_2m_max: numbers,
+  precipitation_sum: numbers,
+  snowfall_sum: numbers,
+  snow_depth_mean: nullableNumbers,
+  wind_speed_10m_max: numbers,
+  weather_code: numbers,
+  cloud_cover_mean: numbers,
+  uv_index_max: numbers,
+  visibility_mean: numbers,
+};
+
+const marineDaily = {
+  wave_height_max: nullableNumbers,
+  wave_period_max: nullableNumbers,
+};
 
 const forecastSchema = z.object({
   daily: z.object({
     time: z.array(z.string()),
-    temperature_2m_max: numbers,
-    precipitation_sum: numbers,
-    snowfall_sum: numbers,
-    snow_depth_mean: nullableNumbers,
-    wind_speed_10m_max: numbers,
-    weather_code: numbers,
-    cloud_cover_mean: numbers,
-    uv_index_max: numbers,
-    visibility_mean: numbers,
+    ...forecastDaily,
   }),
 });
 
 const marineSchema = z.object({
   daily: z.object({
     time: z.array(z.string()),
-    wave_height_max: nullableNumbers,
-    wave_period_max: nullableNumbers,
+    ...marineDaily,
   }),
+});
+
+const searchSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        id: z.number(),
+        name: z.string(),
+        country: optionalText,
+        admin1: optionalText,
+        latitude: z.number(),
+        longitude: z.number(),
+        elevation: z.number(),
+        timezone: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 type Forecast = z.infer<typeof forecastSchema>;
@@ -136,4 +162,90 @@ function at<T>(values: readonly T[], index: number): T {
   const value = values[index];
   if (value === undefined) throw new Error(`missing value at ${index}`);
   return value;
+}
+
+const GEOCODING = "https://geocoding-api.open-meteo.com/v1/search";
+const FORECAST = "https://api.open-meteo.com/v1/forecast";
+const MARINE = "https://marine-api.open-meteo.com/v1/marine";
+const FORECAST_DAYS = "7";
+
+export type Place = {
+  id: number;
+  name: string;
+  country: string | null;
+  region: string | null;
+  latitude: number;
+  longitude: number;
+  elevationM: number;
+  timezone: string;
+};
+
+type FetchLike = (url: string) => Promise<Response>;
+
+const NO_WAVES = {
+  daily: { time: [], wave_height_max: [], wave_period_max: [] },
+};
+
+export async function searchPlaces(
+  name: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<Place[]> {
+  const query = name.trim();
+  if (query === "") return [];
+
+  const body = await readOk(await fetchImpl(searchUrl(query)), "search");
+  const parsed = searchSchema.parse(body);
+  return (parsed.results ?? []).map((place) => ({
+    id: place.id,
+    name: place.name,
+    country: place.country ?? null,
+    region: place.admin1 ?? null,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    elevationM: place.elevation,
+    timezone: place.timezone,
+  }));
+}
+
+export async function loadForecast(
+  place: Place,
+  fetchImpl: FetchLike = fetch,
+): Promise<ForecastDay[]> {
+  const [forecastResponse, marineResponse] = await Promise.all([
+    fetchImpl(forecastUrl(place)),
+    fetchImpl(marineUrl(place)),
+  ]);
+  const forecast = await readOk(forecastResponse, "forecast");
+  // a marine outage still leaves the week. surfing becomes not applicable
+  const marine = marineResponse.ok ? await marineResponse.json() : NO_WAVES;
+  return mapDays(forecast, marine, place.elevationM);
+}
+
+function searchUrl(name: string): string {
+  const params = new URLSearchParams({ name, count: "5" });
+  return `${GEOCODING}?${params}`;
+}
+
+function forecastUrl(place: Place): string {
+  return weatherUrl(FORECAST, place, forecastDaily);
+}
+
+function marineUrl(place: Place): string {
+  return weatherUrl(MARINE, place, marineDaily);
+}
+
+function weatherUrl(base: string, place: Place, daily: object): string {
+  const params = new URLSearchParams({
+    latitude: String(place.latitude),
+    longitude: String(place.longitude),
+    daily: Object.keys(daily).join(","),
+    timezone: place.timezone,
+    forecast_days: FORECAST_DAYS,
+  });
+  return `${base}?${params}`;
+}
+
+async function readOk(response: Response, label: string): Promise<unknown> {
+  if (!response.ok) throw new Error(`${label} failed: ${response.status}`);
+  return response.json() as Promise<unknown>;
 }
