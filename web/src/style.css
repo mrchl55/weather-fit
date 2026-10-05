@@ -1,0 +1,56 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  line-height: 1.4;
+}
+
+main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: end;
+  margin-bottom: 1.5rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #ddd;
+  vertical-align: top;
+}
+
+.best {
+  font-weight: 600;
+}
+
+ul {
+  padding-left: 0;
+  list-style: none;
+}
+
+li + li {
+  margin-top: 0.4rem;
+}
